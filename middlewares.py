@@ -32,6 +32,17 @@ class Repair(object):
 
     def process_exception(self,request, exception):
         #print traceback.print_stack()
+
+        # From interpretter get name that caused exception
+        # 
+        # Use name to query the database, get newest one, update is_good to False
+        #
+        # Query for benign and malicious input
+        #
+        # Pass these two data sets to the GA
+        #
+        # Handle the results to update filter
+
         try:
             type, value, tb = sys.exc_info()
             print type
