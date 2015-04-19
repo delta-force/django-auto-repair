@@ -12,4 +12,12 @@ class Request(models.Model):
 	
 	def __unicode__(self):
 		return str(self.timestamp)
+		
+class Filter(models.Model):
+	url_path = models.CharField(max_length=50)
+	field_name = models.CharField(max_length=200, null=True)
+	regex_filter = models.CharField(max_length=200)
+
+	def __unicode__(self):
+		return "url_path: " + self.url_path + ", field_name: " + self.field_name + ", regex_filter: " + self.regex_filter
 	
