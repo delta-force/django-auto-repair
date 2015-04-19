@@ -1,7 +1,6 @@
-import traceback
-import sys
-import time
-from demo_webapp.models import Request
+import traceback, sys, time, re
+from secure_app.models import Request, Filter
+from django.http import HttpResponse, HttpResponsePermanentRedirect
 
 class Repair(object):
 
@@ -19,14 +18,26 @@ class Repair(object):
         if request.method == 'POST':
             param_map = request.POST
 
+        # Filter requests
+        # Check if Filter objects' url path, form field name, and regex matches the request
+        isEvil = False
+        for key, value in param_map.iteritems():
+            for f in Filter.objects.all():
+                url_path_f = getattr(f, 'url_path'); field_name_f = getattr(f, 'field_name'); regex_filter_f = getattr(f, 'regex_filter')
+                x = re.compile(regex_filter_f)
+                if url_path == url_path_f and key == field_name_f and x.search(str(value)):
+                    isEvil = True
+                    return HttpResponse("Evil input detected -_-")
+                    
         #save to the database
         if len(param_map) != 0 and "delete_selected" not in str(param_map):
             r = Request(timestamp=timestamp, full_url=full_url, host=host, url_path=url_path, is_good=is_good, param_map=param_map)
             r.save()
         
         # AND/OR write to file 
-        f = open('requests.log', 'a')
+        f = open('secure_app_requests.log', 'a')
         f.write(timestamp + ";" + full_url + ";" + host + ";" + url_path + ";" + str(is_good) + ";" +  str(param_map) + "\n")
+        f.write("Is request evil?: " + str(isEvil) + "\n")
         f.close()
         return
 
