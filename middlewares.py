@@ -31,7 +31,6 @@ class Repair(object):
         return
 
     def process_exception(self,request, exception):
-        #print traceback.print_stack()
 
         # From interpretter get name that caused exception
         # 
@@ -42,7 +41,7 @@ class Repair(object):
         # Pass these two data sets to the GA
         #
         # Handle the results to update filter
-
+        #Filter.objects.filter(order_by('')
         try:
             type, value, tb = sys.exc_info()
             print type
