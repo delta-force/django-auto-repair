@@ -8,8 +8,9 @@ class Request(models.Model):
 	host = models.CharField(max_length=50)
 	url_path = models.CharField(max_length=50)
 	is_good = models.BooleanField(default=True)
-	param_map = JSONField()
-	
+        name = models.CharField(max_length=200)
+        value = models.CharField(max_length=200)
+
 	def __unicode__(self):
 		return str(self.timestamp)
 		
