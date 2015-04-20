@@ -135,7 +135,7 @@ class GaRegexCreator():
             print(logbook.stream)
 
         gen = 1
-        while gen <= self.NGEN and logbook[-1]["max"][0] != 0.0:
+        while gen <= self.NGEN and logbook[-1]["max"][0] != 0.0 and logbook[-1]["max"][1] != 0.0:
             
             # Select the next generation individuals
             offspring = self.toolbox.select(pop, len(pop))
