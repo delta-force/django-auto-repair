@@ -8,10 +8,12 @@ from deap import base
 from deap import creator
 from deap import tools
 
+import pprint
 class GaRegexCreator():
 
-    CXPB, MUTPB, ADDPB, DELPB, MU, NGEN = 0.7, 0.4, 0.4, 0.4, 200, 1000
-    ESCAPED = ['\d', '\D', '\w', '\W']
+    CXPB, MUTPB, ADDPB, DELPB, MU, NGEN = 0.7, 0.4, 0.4, 0.4, 100, 1000
+    ESCAPED = ['\d', '\D', '\w', '\W', '\s', '\S']
+    SPECIAL = ['\@', '\\', '\<' ,'/', '\>', '\.', '-']
 #VALID_CHARS = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.,*+?{}[]()") + escaped
     ALPHANUMERIC = map(chr,range(65,91)) + map(chr,range(97,123)) + map(str,range(0,10))
     VALID_CHARS = list("+*[]") + ESCAPED # + ALPHANUMERIC
@@ -54,33 +56,65 @@ class GaRegexCreator():
     def gen_filter(self, min, max):
         l = random.randint(min, max)
         return [self.get_random_char() for i in range(l)]
-            
-    def eval(self, ind):
-        pattern = "^" + "".join(ind) + "$"
-        sB=0
-        sE =0
-#Need to make sure if there is a opening there is also a closing
-        if pattern.count("[") != 0 and pattern.count("]") == 0:
-            sB = 5
-            sE = 5
+    
+    def get_evil_score(self, pattern, verbose=False):
+        '''
+        Get the score for the evil data
+        This is separate from good because we may want to penalize 
+        differently
+        '''
+        score = 0
         for evil in self.data_evil:
             try:
                 if re.match(pattern, evil):
-                    sE+=100
+                    score+=100
+                    if verbose:
+                        print "%d    Match!: %s for %s" % (score, pattern, evil)
                 else:
-                    sE-=1
-            except:
-                sE+=100
+                    score-=1
+                    if verbose:
+                        print "%d   No match: %s for %s" %  (score, pattern, evil)
+            except Exception as e:
+                if verbose:
+                    print e
+                score+=100
+        return score
 
+    def get_good_score(self, pattern, verbose=False):
+        score = 0
         for good in self.data_benign:
             try:
                 if re.match(pattern, good):
-                    sB-=1
+                    score-=1
                 else:
-                    sB+=1
-            except:
-                sB+=100
-        return abs(len(self.data_benign) + sB),abs(len(self.data_evil) + sE),len(pattern),
+                    score+=1
+            except Exception as e:
+                score+=100
+        return score
+
+
+    def eval(self, ind):
+        pattern = "^" + "".join(ind) + "$"
+        sB = 0
+        sE = 0
+#Need to make sure if there is a opening there is also a closing
+        if pattern.count("[") != 0 and pattern.count("]") == 0:
+            sB += 5
+            sE += 5
+            
+        sE += self.get_evil_score(pattern)
+        sB += self.get_good_score(pattern)    
+
+        # Need to minimize these values
+        good_score =len(self.data_benign) + sB
+        bad_score = len(self.data_evil) + sE
+        len_score = len(pattern)
+
+        if good_score == 0 and bad_score == 0:
+            pass
+            #pprint.pprint( log)
+            #print "%s  Good=%d Bad=%d Len=%d" % (pattern, good_score, bad_score, len_score)
+        return good_score, bad_score, len_score,
 
     def mutAddFilter(self, ind):
         c = self.get_random_char()
@@ -100,14 +134,16 @@ class GaRegexCreator():
         return individual, 
 
     def mate(self, ind1, ind2):
-        
+        '''
+        Random swap
+        '''
         for i in range(min(len(ind1), len(ind2))):
             if random.random() < 0.5:
                 ind1[i], ind2[i] = ind2[i], ind1[i]
         return ind1, ind2
 
     def evolve(self):
-        random.seed(64)
+        random.seed(65)
 
 
         pop = self.toolbox.population(n=self.MU)
@@ -120,7 +156,7 @@ class GaRegexCreator():
         stats.register("max", numpy.max, axis=0)
         
         logbook = tools.Logbook()
-        logbook.header = "gen", "evals", "std", "min", "avg", "max", "best"
+        logbook.header = "gen", "evals", "std", "min", "avg", "[good,evil,len]", "best"
         
         # Evaluate every individuals
         fitnesses = self.toolbox.map(self.toolbox.evaluate, pop)
@@ -130,12 +166,13 @@ class GaRegexCreator():
         hof.update(pop)
         record = stats.compile(pop)
         logbook.record(gen=0, evals=len(pop), **record)
+
 #Only if verbose
         if self.verbose:
             print(logbook.stream)
 
         gen = 1
-        while gen <= self.NGEN and logbook[-1]["max"][0] != 0.0 and logbook[-1]["max"][1] != 0.0:
+        while gen <= self.NGEN and (logbook[-1]["max"][0] != 0.0 or logbook[-1]["max"][1] != 0.0):
             
             # Select the next generation individuals
             offspring = self.toolbox.select(pop, len(pop))
@@ -168,11 +205,19 @@ class GaRegexCreator():
             
             b = tools.selBest(pop, k=1)[0]
             w = "".join(b) 
-            
+           
+            if self.verbose:
+                for p in pop:
+                    _p = "".join(p)
+                    if w == _p:
+                        print "*\t" + _p
+                    else:
+                        print "\t" + _p
+
             # Select the next generation population
-            pop = self.toolbox.select(pop + offspring, self.MU)
             record = stats.compile(pop)
             logbook.record(gen=gen, evals=len(invalid_ind), best=w, **record)
+            pop = self.toolbox.select(pop + offspring, self.MU)
 #only if verbose            
             if self.verbose:            
                 print(logbook.stream)
@@ -184,7 +229,7 @@ class GaRegexCreator():
     def create_regex(self):
         pop, stats = self.evolve()
         b = tools.selBest(pop, k=1)[0]
-        return "".join(b)
+        return "^" + "".join(b) + "$"
 
 
 
@@ -201,5 +246,7 @@ if __name__ == "__main__":
     data_benign = read_data(f2)
     ga = GaRegexCreator(data_evil, data_benign, verbose = True)
     
-    print ga.create_regex()
+    filter = ga.create_regex()
+    print filter
 
+    ga.get_evil_score(filter, verbose=True)
