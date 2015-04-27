@@ -4,6 +4,7 @@ from django.db import models
 class Request(models.Model):
         # This isnt that good to be unique
         # better to do ip||port||timestamp
+        sessionid = models.TextField()
 	timestamp = models.TextField()
 	url_path = models.CharField(max_length=50)
 	is_good = models.BooleanField(default=True)

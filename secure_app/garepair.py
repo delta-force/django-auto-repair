@@ -2,7 +2,7 @@
 import re
 import sys
 import random
-import numpy
+#import numpy
 from deap import algorithms
 from deap import base
 from deap import creator
@@ -150,13 +150,13 @@ class GaRegexCreator():
         hof = tools.ParetoFront()
         
         stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", numpy.mean, axis=0)
-        stats.register("std", numpy.std, axis=0)
-        stats.register("min", numpy.min, axis=0)
-        stats.register("max", numpy.max, axis=0)
+        #stats.register("avg", numpy.mean, axis=0)
+        #stats.register("std", numpy.std, axis=0)
+        stats.register("min", min)
+        stats.register("max", max)
         
         logbook = tools.Logbook()
-        logbook.header = "gen", "evals", "std", "min", "avg", "[good,evil,len]", "best"
+        logbook.header = "gen", "evals", "min", "[good,evil,len]", "best"
         
         # Evaluate every individuals
         fitnesses = self.toolbox.map(self.toolbox.evaluate, pop)
@@ -227,10 +227,16 @@ class GaRegexCreator():
         return pop, logbook
     
     def create_regex(self):
-        pop, stats = self.evolve()
-        b = tools.selBest(pop, k=1)[0]
-        return "^" + "".join(b) + "$"
+        pop, logbook = self.evolve()
+        gens = logbook[-1]["gen"]
+        good_score =logbook[-1]["max"][0] 
+        bad_score = logbook[-1]["max"][1] 
 
+
+        b = tools.selBest(pop, k=1)[0]
+        regex = "^" + "".join(b) + "$"
+
+        return regex, gens, good_score, bad_score,
 
 
 
@@ -244,9 +250,12 @@ if __name__ == "__main__":
     f2 = sys.argv[2]
     data_evil = read_data(f1)
     data_benign = read_data(f2)
-    ga = GaRegexCreator(data_evil, data_benign, verbose = True)
+    ga = GaRegexCreator(data_evil, data_benign, verbose = False)
     
-    filter = ga.create_regex()
+    filter, gen, good_score, bad_score, = ga.create_regex()
     print filter
+    print "Gens=" + str(gen)
+    print "Good score=" + str(good_score)
+    print "Bad score=" + str(bad_score)
 
     ga.get_evil_score(filter, verbose=True)

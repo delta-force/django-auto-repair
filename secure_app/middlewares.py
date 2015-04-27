@@ -1,16 +1,29 @@
 import traceback, sys, time, re
+from django.contrib.sessions.backends.db import SessionStore
 from secure_app.models import Request, Filter
 from django.http import HttpResponse, HttpResponsePermanentRedirect
 import logging
 from garepair import GaRegexCreator
-
+import pprint
 logger = logging.getLogger(__name__)
+#sh = logging.StreamHandler()
+#logger.addHandler(sh)
 
 class Repair(object):
- 
+    '''
+    Repair a fatal crash that occurs by creating a regex filter to
+    allow "good" input and block "bad" input. Bad input is input that 
+    causes a fatal crash.
+
+    The current design is vulnerable to sophisticated training data poisioning
+    such that a malicious user inserts bad data that gets counted as good. 
+    When the regex is created, it cant tell the difference between good and 
+    bad.
+    '''
+
     REQUEST_ID = "req_id"
 
-    def save_request(self, timestamp, url_path, param_map):
+    def save_request(self,sessionid, timestamp, url_path, param_map):
         '''
         Save every request so it can be later used for training. 
         Each requst name and value is stored
@@ -24,6 +37,7 @@ class Repair(object):
             for key, value in param_map.iteritems():
                 r = Request(
                         timestamp=timestamp, 
+                        sessionid=sessionid,
                         url_path=url_path, 
                         is_good=is_good, 
                         key=str(key), 
@@ -66,8 +80,12 @@ class Repair(object):
         pass
 
     def process_request(self, request):
-
-
+        if not request.session.exists(request.session.session_key):
+            logger.debug("creating new session")
+            request.session.create()
+        sessionid = request.session.session_key
+        logger.debug(sessionid)
+#        pprint.pprint(request.META, stream=sys.stderr)
         timestamp = str(time.time())
         # we define a request id and tie it to the 
         # request object so there is a way during an exception 
@@ -83,48 +101,63 @@ class Repair(object):
                 return HttpResponse("Evil input detected -_-")
             else:
                 #save to the database
-                self.save_request(timestamp, url_path, param_map) 
+                self.save_request(sessionid, timestamp, url_path, param_map) 
 
         return
 
     def get_request_data(self, param_name, is_good):
         return [r.value for r in Request.objects.filter(key = param_name, is_good = is_good)]
 
-    
+    def _remove_poisoned_data(self, sessionid):
+        '''
+        If an exception occurs we want to remove all the data entered by 
+        this malicous user because it may have been poisoned
+        '''
+        Request.objects.filter(sessionid=sessionid, is_good=True).delete()
+
     def process_exception(self,request, exception):
+        sessionid = request.session.session_key
         #try:
         id = request.META[self.REQUEST_ID]
-        logger.debug("Processing exception..." + id)        
+        logger.debug("Processing exception..." + id + " " + sessionid)        
+
         url_path = str(request.get_full_path())
     
         # From interpretter get name that caused exception
 #TODO REMOVE ME, I AM HERE FOR TESTING
-        vulnerable_name = "grad_year" 
-
+        vulnerable_name = "searchterm" 
+        
         # Use request to query the database, so we can update the input to evil
         evil_req = Request.objects.filter(timestamp=id, url_path=url_path, key=vulnerable_name)[0]
         evil_req.is_good = False
         evil_req.save()
+        self._remove_poisoned_data(sessionid)
 
         # Query for benign and malicious input
         data_evil = self.get_request_data(vulnerable_name, False)
-        logger.debug("================EVIL=================")
-        logger.debug(str(data_evil))
+        #logger.debug("================EVIL=================")
+        #logger.debug(str(data_evil))
         data_benign = self.get_request_data(vulnerable_name, True)
-        logger.debug("================GOOD=================")
-        logger.debug(str(data_benign))
+        #logger.debug("================GOOD=================")
+        #logger.debug(str(data_benign))
 
         # Pass these two data sets to the GA
-        ga = GaRegexCreator(data_evil, data_benign, verbose=True)
-        regex = ga.create_regex()
+        ga = GaRegexCreator(data_evil, data_benign, verbose=False)
+        regex, gens, good_score, bad_score, = ga.create_regex()
 
         filter, created = Filter.objects.get_or_create(url_path=url_path,field_name=vulnerable_name) 
         filter.regex_filter = regex
         filter.save()
 
-        logger.debug("Filter " + regex + " has been applied for " + vulnerable_name) 
-
-
+        logger.debug("Filter " + regex + " has been applied for " + vulnerable_name + " in " + str(gens) + " gens") 
+        try:        
+            type, value, tb = sys.exc_info()
+            logger.debug(type)
+            logger.debug(value)
+            logger.debug(traceback.extract_tb(tb))
+        except Exception as e:
+            print e
+            #del tb
             # Save the regex so it can filter evil things next time
         #except Exception as e:
         #    logger.error("Unknown exception " + str(e))

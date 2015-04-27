@@ -4,7 +4,7 @@ from .models import Request
 from .models import Filter
 
 class RequestAdmin(admin.ModelAdmin):
-	list_display = ('timestamp', 'url_path', 'key', 'value', 'is_good')
+	list_display = ('timestamp','sessionid', 'url_path', 'key', 'value', 'is_good')
 	list_filter = ['is_good']
 
 class FilterAdmin(admin.ModelAdmin):
