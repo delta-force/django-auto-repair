@@ -13,7 +13,13 @@ class Request(models.Model):
 
 	def __unicode__(self):
 		return str(self.timestamp)
-		
+
+        def __str__(self):
+            return self._to_str()
+        def __repr__(self):
+            return self._to_str()
+        def _to_str(self):
+            return self.sessionid + " " + self.timestamp + " " + self.key + ":" + self.value + " " + str(self.is_good)
 class Filter(models.Model):
         '''
         The url path that is mapped to a view

@@ -1,11 +1,13 @@
 import traceback, sys, time, re
 from django.contrib.sessions.backends.db import SessionStore
 from secure_app.models import Request, Filter
+from django.db.models import Count
 from django.http import HttpResponse, HttpResponsePermanentRedirect
 import logging
 from garepair import GaRegexCreator
 import pprint
 logger = logging.getLogger(__name__)
+import requests
 #sh = logging.StreamHandler()
 #logger.addHandler(sh)
 
@@ -115,18 +117,76 @@ class Repair(object):
         '''
         Request.objects.filter(sessionid=sessionid, is_good=True).delete()
 
+    def make_request_to_clone(self, method, url_path, payload):
+
+        url = "http://127.0.0.1:8888" + url_path
+        status_code = None
+        if method == 'GET':
+            r = requests.get(url, params=payload) 
+            status_code = r.status_code
+        else: 
+            r = requests.post(url, data=payload) 
+            status_code = r.status_code
+        return status_code
+
+    def identify_evil_input(self, request, url_path, bad_time):
+        logger.info("Identifying evil input...")
+        params = self.get_param_map(request)
+
+        #Get the first good record
+        good_record_timestamp = Request.objects.filter(url_path=url_path, is_good = True).exclude(timestamp=bad_time).values('timestamp').annotate(total=Count('timestamp'))[0]['timestamp']
+
+        
+        key_vals = Request.objects.filter(timestamp=good_record_timestamp).values('key','value')
+        logger.debug("Good key valu pairs " + str(key_vals))
+
+        #Need to make at most request sof rnumber of params
+        for i in range(len(key_vals)):
+
+            #For the request
+            payload = {}
+            for row in range(len(key_vals)):
+                key = key_vals[row]['key']
+                #Use possible bad input
+                if row == i:
+                    val = params[key]
+                else: 
+                    val = key_vals[row]['value']
+                
+        #        val = "hi"
+                payload[key] = val
+
+            status_code = self.make_request_to_clone(request.method, url_path, payload)
+            logger.debug("Request made " + str(payload) + " return " + str(status_code))
+            if status_code == 500:
+                evil_key = key_vals[i]['key']
+                evil_input = params[evil_key]
+                logger.debug("Found the evil input! key=" + evil_key + " val=" + evil_input)
+
+                return evil_key
+        return None
+
+
     def process_exception(self,request, exception):
+
         sessionid = request.session.session_key
         #try:
         id = request.META[self.REQUEST_ID]
         logger.debug("Processing exception..." + id + " " + sessionid)        
 
         url_path = str(request.get_full_path())
-    
+        
+        evil_key = self.identify_evil_input(request, url_path, id)
         # From interpretter get name that caused exception
 #TODO REMOVE ME, I AM HERE FOR TESTING
-        vulnerable_name = "searchterm" 
+        vulnerable_name = evil_key 
+       
         
+        if vulnerable_name == None:
+            logger.error("Could not find name, :-(")
+            return
+
+
         # Use request to query the database, so we can update the input to evil
         evil_req = Request.objects.filter(timestamp=id, url_path=url_path, key=vulnerable_name)[0]
         evil_req.is_good = False
@@ -150,13 +210,14 @@ class Repair(object):
         filter.save()
 
         logger.debug("Filter " + regex + " has been applied for " + vulnerable_name + " in " + str(gens) + " gens") 
-        try:        
-            type, value, tb = sys.exc_info()
-            logger.debug(type)
-            logger.debug(value)
-            logger.debug(traceback.extract_tb(tb))
-        except Exception as e:
-            print e
+        
+        #try:        
+        #    type, value, tb = sys.exc_info()
+        #    logger.debug(type)
+        #    logger.debug(value)
+        #    logger.debug(traceback.extract_tb(tb))
+        #except Exception as e:
+        #    print e
             #del tb
             # Save the regex so it can filter evil things next time
         #except Exception as e:
