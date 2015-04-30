@@ -195,11 +195,11 @@ class Repair(object):
 
         # Query for benign and malicious input
         data_evil = self.get_request_data(vulnerable_name, False)
-        #logger.debug("================EVIL=================")
-        #logger.debug(str(data_evil))
+        logger.debug("================EVIL=================")
+        logger.debug(str(data_evil))
         data_benign = self.get_request_data(vulnerable_name, True)
-        #logger.debug("================GOOD=================")
-        #logger.debug(str(data_benign))
+        logger.debug("================GOOD=================")
+        logger.debug(str(data_benign))
 
         # Pass these two data sets to the GA
         ga = GaRegexCreator(data_evil, data_benign, verbose=False)
@@ -208,8 +208,8 @@ class Repair(object):
         filter, created = Filter.objects.get_or_create(url_path=url_path,field_name=vulnerable_name) 
         filter.regex_filter = regex
         filter.save()
-
-        logger.debug("Filter " + regex + " has been applied for " + vulnerable_name + " in " + str(gens) + " gens") 
+        logger.debug("good " + str(good_score) + " bad " + str(bad_score))
+        logger.debug("Filter " + regex + " has been applied for " + vulnerable_name + " in " + str(gens) + " gens")
         
         #try:        
         #    type, value, tb = sys.exc_info()
@@ -224,6 +224,7 @@ class Repair(object):
         #    logger.error("Unknown exception " + str(e))
 
         #finally:
-#            return HttpResponsePermanentRedirect(request.get_full_path().split("?")[0])
+            #return HttpResponsePermanentRedirect(request.get_full_path().split("?")[0])
+        html = "<div align=\"center\">Chuck disapproves!<br/><img src=\"http://cdn.redalertpolitics.com/files/2014/06/chuck-norris-ap-photo.jpg\"></div>"
+        return HttpResponse(html)
         #     pass
-
