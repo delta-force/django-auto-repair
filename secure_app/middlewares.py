@@ -99,8 +99,10 @@ class Repair(object):
 
             self.taint_input(param_map)
 
-            if self.has_evil_input(url_path, param_map):           
-                return HttpResponse("Evil input detected -_-")
+            if self.has_evil_input(url_path, param_map):
+                html = "<div align=\"center\"><h1>Chuck blocks all EVIL!</h1><br/><img src=\"http://masternorris.com/images/content/Chuck_Norris_kick-MasterNorris_com.jpg\"></div>"
+                return HttpResponse(html)           
+                #return HttpResponse("Evil input detected -_-")
             else:
                 #save to the database
                 self.save_request(sessionid, timestamp, url_path, param_map) 
@@ -225,6 +227,6 @@ class Repair(object):
 
         #finally:
             #return HttpResponsePermanentRedirect(request.get_full_path().split("?")[0])
-        html = "<div align=\"center\">Chuck disapproves!<br/><img src=\"http://cdn.redalertpolitics.com/files/2014/06/chuck-norris-ap-photo.jpg\"></div>"
+        html = "<div align=\"center\"><h1>Chuck disapproves EXCEPTIONS!</>h1<br/><img src=\"http://cdn.redalertpolitics.com/files/2014/06/chuck-norris-ap-photo.jpg\"></div>"
         return HttpResponse(html)
         #     pass
