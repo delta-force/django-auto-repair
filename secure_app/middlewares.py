@@ -1,8 +1,11 @@
 import traceback, sys, time, re
+import inspect
+
 from django.contrib.sessions.backends.db import SessionStore
 from secure_app.models import Request, Filter
 from django.db.models import Count
-from django.http import HttpResponse, HttpResponsePermanentRedirect
+from django.http import HttpResponse, HttpResponsePermanentRedirect, QueryDict
+
 import logging
 from garepair import GaRegexCreator
 import pprint
@@ -73,13 +76,23 @@ class Repair(object):
             param_map = request.POST
         return param_map
 
-    def taint_input(self, param_map):
+    def taint_input(self, request):
         '''
         Taint the input so we can determine if one of these inputs
         caused an exception 
         '''
-        #TODO implement me
-        pass
+        def taint_request_data(req):
+            for k in req:
+                req[k] = req[k].taint_src(k)
+        
+        # set request to mutable and mark all of its inputs as tainted
+        request.POST._mutable = True
+        taint_request_data(request.POST)
+        request.POST._mutable = False
+        
+        request.GET._mutable = True
+        taint_request_data(request.GET)
+        request.GET._mutable = False
 
     def process_request(self, request):
         if not request.session.exists(request.session.session_key):
@@ -92,13 +105,14 @@ class Repair(object):
         # we define a request id and tie it to the 
         # request object so there is a way during an exception 
         # we can retrieve information saved from the database
-        request.META[self.REQUEST_ID] = timestamp 
+        request.META[self.REQUEST_ID] = timestamp
         url_path = str(request.get_full_path())
+  
+        self.taint_input(request)
+        
         param_map = self.get_param_map(request)
         if param_map:
-
-            self.taint_input(param_map)
-
+        
             if self.has_evil_input(url_path, param_map):
                 html = "<div align=\"center\"><h1>Chuck blocks all EVIL!</h1><br/><img src=\"http://masternorris.com/images/content/Chuck_Norris_kick-MasterNorris_com.jpg\"></div>"
                 return HttpResponse(html)           
@@ -168,26 +182,38 @@ class Repair(object):
                 return evil_key
         return None
 
-
     def process_exception(self,request, exception):
-
+        
         sessionid = request.session.session_key
         #try:
         id = request.META[self.REQUEST_ID]
         logger.debug("Processing exception..." + id + " " + sessionid)        
 
         url_path = str(request.get_full_path())
-        
-        evil_key = self.identify_evil_input(request, url_path, id)
-        # From interpretter get name that caused exception
-#TODO REMOVE ME, I AM HERE FOR TESTING
-        vulnerable_name = evil_key 
        
+        ty, val, tb = sys.exc_info()
+        
+        while tb.tb_next:
+            tb = tb.tb_next
+        
+        frame = tb.tb_frame
+        args, varargs, keywords, locals = inspect.getargvalues(frame)
+        
+        for name in args:
+            v = locals[name]
+            if hasattr(v, "istainted"):
+                vulnerable_name = v.sources()[0][0]
+         
+        print "Vulnerable name is ", vulnerable_name
+        
+        #evil_key = self.identify_evil_input(request, url_path, id)
+        # From interpretter get name that caused exception
+        #TODO REMOVE ME, I AM HERE FOR TESTING
+        #vulnerable_name = evil_key 
         
         if vulnerable_name == None:
             logger.error("Could not find name, :-(")
             return
-
 
         # Use request to query the database, so we can update the input to evil
         evil_req = Request.objects.filter(timestamp=id, url_path=url_path, key=vulnerable_name)[0]
