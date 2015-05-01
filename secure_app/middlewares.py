@@ -192,20 +192,33 @@ class Repair(object):
         url_path = str(request.get_full_path())
        
         ty, val, tb = sys.exc_info()
-        
+       
+	def renderframe(frame):
+            filename, lineno, function, code_context, index = inspect.getframeinfo(tb.tb_frame)
+            print "Visiting frame for function {} () @ {}: {}".format(function, filename, lineno)
+	    print code_context[0]
+
         while tb.tb_next:
+            renderframe(tb.tb_frame)
             tb = tb.tb_next
         
         frame = tb.tb_frame
+        renderframe(frame)
+
+	print "Found the frame where exception occured"
+	
         args, varargs, keywords, locals = inspect.getargvalues(frame)
-        
+	
+        vulnerable_name = None
+
         for name in args:
             v = locals[name]
-            if hasattr(v, "istainted"):
+            if hasattr(v, "istainted") and v.istainted():
                 vulnerable_name = v.sources()[0][0]
-         
-        print "Vulnerable name is ", vulnerable_name
-        
+                print "Found tainted data in function argument '{}'".format(name)
+                print "{} originated from the '{}' input field".format(name, vulnerable_name)
+		break
+ 
         #evil_key = self.identify_evil_input(request, url_path, id)
         # From interpretter get name that caused exception
         #TODO REMOVE ME, I AM HERE FOR TESTING
@@ -253,6 +266,6 @@ class Repair(object):
 
         #finally:
             #return HttpResponsePermanentRedirect(request.get_full_path().split("?")[0])
-        html = "<div align=\"center\"><h1>Chuck disapproves EXCEPTIONS!</>h1<br/><img src=\"http://cdn.redalertpolitics.com/files/2014/06/chuck-norris-ap-photo.jpg\"></div>"
+        html = "<div align=\"center\"><h1>Chuck doesn't make EXCEPTIONS!</h1><br/><img src=\"http://cdn.redalertpolitics.com/files/2014/06/chuck-norris-ap-photo.jpg\"></div>"
         return HttpResponse(html)
         #     pass
