@@ -1,8 +1,10 @@
-# django-auto-repair
-Django middleware to self repairing web services from attack. The middleware handles exceptions and then later filters malicious input known to cause the exception.
+# delta_force-self_defense-django
+Django middleware to provide self defense from attack various blind attacks such as SQL injection. Upon fatal errors the middleware generates regular expressions to block requests that cause errors.
 
 
-# Installation
+# Manual Install
 
-1. Insert into Django applicaiton
-2. Configure settings.py
+1. Run `pip install -r requirements.txt` to install dependencies
+2. Drop secure_app into root of Django application
+2. Add secure_app to INSTALLED_APPS in settings.py
+3. Add secure_app.middlewares.Repair to MIDDLEWARE_CLASSES in settings.py
